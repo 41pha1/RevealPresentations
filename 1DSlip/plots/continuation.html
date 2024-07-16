@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+    <style type="text/css">
+        body{
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <script src="../lib/sylvester.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/ml-matrix@6.11.1/matrix.umd.min.js"></script> -->
+
+    <script src="../lib/maths.js"></script>
+    <script src="../lib/plotly-2.32.0.min.js" charset="utf-8"></script>
+
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <script src="../code/simulation.js"></script>
+
+    <div class="row" style = "display:flex; justify-content: center;">
+        <div class = "col-50" id="continuationPlot" style="width:700px;height:500px;"></div>
+    </div>
+
+    <p id = "natural-period" style = "position: absolute; top: 260px; left: 200px; display: none;">
+        \(\frac{2\pi}{\sqrt{k/m}} \)
+    </p>
+
+    <p id = "natural-height" style = "position: absolute; top: 345px; left: 200px; display: none;">
+        \( - \frac{g * m}{k} \)
+    </p>
+
+    <p style="text-align: center;">Fig. 6: Continuation plot for different values of T, ξ and λ</p>
+
+    <script>
+        const parameters = { m: 1, k: 100, b: 1, g: 9.81, h: 0.005, I: "Runge-Kutta" };
+
+        const json_path = "../data/continuation.json";
+        const initialGuess = { T: 1.25, xi: 10, a: 1, x0: $V([1, 0]) };
+        const animDuration = 500;
+        const maxSteps = 300;
+
+        const xi_range = [0, 8], T_range = [0, 1.5], a_range = [-0.5, 1.5];
+
+        var currentSolution = getInitialSolution();
+        var x = [], y = [], z = [], tangents = [];
+        var animInterval = null;
+        var currentStep = 0, currentDistance = 0.02, currentAngle = 3, currentFocusWeight = 1, currentEye = { x: 1.5, y: 0, z: 0 }, current_marker_size = 4;
+
+        var _transitions = [
+            {
+                transitionForward: () =>  {transitionPlot(1, 0.02, 3, 1, 10, 4);},
+                transitionBackward: () => {transitionPlot(0, 0.02, 3, 1, 10, 4);},
+                index: 1
+            },
+            {
+                transitionForward: () =>  {transitionPlot(5, 0.05, 3, 1, 2000, 4);},
+                transitionBackward: () => {transitionPlot(1, 0.02, 3, 1, 10, 4);},
+                index: 2
+            },
+            {
+                transitionForward: () =>  {transitionPlot(299, 1, 10 - 6.2 , 0, 15000, 0.001);},
+                transitionBackward: () => {transitionPlot(5, 0.05, 3, 1, 10, 4);},
+                index: 3
+            },
+            {
+                transitionForward: () =>  { 
+                    transitionPlot(299, 1, 10 - 6.2 , 0, 10, 0.001);
+
+                    setTimeout(() => {
+                        layout.scene.camera.projection.type = 'orthographic';
+                        layout.scene.camera.center = { x: 0, y: 0, z: 0 };
+                        layout.scene.aspectratio = { x: 1.5, y: 1.5, z: 1.5 };
+
+                        tangentPlot.x = [ x[0], x[0] ];
+                        tangentPlot.y = [ y[0], y[0] ];
+                        tangentPlot.z = [ z[0], z[0] ];
+
+                        lines.mode = "lines";
+
+                        transitionEye({ x: 1.5, y: 0, z: 0 });
+                    }, 100);
+                },
+                transitionBackward: () => {
+                    layout.scene.camera.projection.type = 'perspective';
+                    lines.mode = "lines+markers";
+                    transitionPlot(299, 1, 10 - 6.2 , 0, 10, 0.001);
+                },
+                index: 4
+            },
+            {
+                transitionForward: () =>  {
+                    document.getElementById("natural-height").style.display = "block";
+                    transitionEye({ x: -0.00001, y: -1.5, z: -0.00001 });
+                },
+                transitionBackward: () => {
+                    document.getElementById("natural-height").style.display = "none";
+                    transitionEye({ x: 1.5, y: 0, z: 0 });
+                },
+                index: 5
+            },
+            {
+                transitionForward: () =>  {
+                    document.getElementById("natural-period").style.display = "block";
+                    document.getElementById("natural-height").style.display = "none";
+                    transitionEye({
+                        "x": 9.28684379515674e-20,
+                        "y": -6.123226953255837e-17,
+                        "z": 1
+                    });
+                },
+                transitionBackward: () => {
+                    document.getElementById("natural-period").style.display = "none";
+                    transitionEye({ x: -0.00001, y: -1.5, z: -0.00001 });
+                },
+                index: 6
+            }
+        ]
+
+        function cubicEaseInOut(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+        
+        function transitionEye(newEye, time = 500) {
+            clearInterval(animInterval);
+
+            const frameTime = 25;
+            let i = 0;
+            let frameCount = Math.floor(time / frameTime) + 1;
+
+            animInterval = setInterval(() => {
+
+                const t = cubicEaseInOut(i / frameCount);
+                const eye = {
+                    x: (currentEye.x * (1 -  t) + newEye.x *  t),
+                    y: (currentEye.y * (1 -  t) + newEye.y *  t),
+                    z: (currentEye.z * (1 -  t) + newEye.z *  t)
+                };
+
+                const mag = Math.sqrt(eye.x * eye.x + eye.y * eye.y + eye.z * eye.z);
+                eye.x /= mag;
+                eye.y /= mag;
+                eye.z /= mag;
+
+                if (i > frameCount) {
+                    clearInterval(animInterval);
+                    layout.scene.camera.eye = newEye;
+                    Plotly.animate('continuationPlot', {layout: layout}, {transition: {duration: 0}, frame: {duration: 0, redraw: true}});
+                    currentEye = newEye;
+                } else {
+                    layout.scene.camera.eye = eye;
+                    Plotly.animate('continuationPlot', {layout: layout}, {transition: {duration: 0}, frame: {duration: 0, redraw: true}});
+                    i++;
+                }
+            }, frameTime);
+        }
+
+        function getInitialSolution() {
+            const result = SlipSimulation.findPeriodicSolution(initialGuess.x0, initialGuess.xi, initialGuess.T, initialGuess.a, parameters);
+
+            return $V([result.x, result.v, result.xi, result.T, initialGuess.a]);
+        }
+        
+        function continueSolution(initialSolution, tangent, ds = 0.05) {
+            const dx = tangent.x(ds);
+
+            const predict = initialSolution.add(dx);
+            const correct = SlipSimulation.findPeriodicSolution($V([predict.e(1), predict.e(2)]), predict.e(3), predict.e(4), predict.e(5), parameters);
+            return $V([correct.x, correct.v, correct.xi, correct.T, correct.x]);
+        }
+
+        const layout = {
+            title: 'Continuation Plot',
+            scene: {
+                aspectratio: {
+                    x: 1,
+                    y: 1,
+                    z: 1
+                },
+                camera: {
+                    projection: {
+                        type: 'perspective'
+                    }
+                },
+                xaxis: {
+                    title: 'ξ',
+                    nticks: 5,
+                    range: xi_range
+                },
+                yaxis: {
+                    title: 'T',
+                    nticks: 5,
+                    range: T_range
+                },
+                zaxis: {
+                    title: 'λ',
+                    nticks: 5,
+                    range: a_range
+                }
+            },
+            showlegend: false,
+            margin: {
+                l: 10,  
+                r: 10,
+                b: 0,
+                t: 0,
+                pad: 4
+            },
+            paper_bgcolor:'rgba(0,0,0,0)',
+            plot_bgcolor:'rgba(0,0,0,0)'
+        };
+
+        const lines = {
+            x: x,
+            y: y,
+            z: z,
+            mode: "lines+markers",
+            type: "scatter3d",
+            line: {
+                width: 2,
+                color : 'blue',
+            },
+            marker: {
+                size: 4,
+                color : 'Black',
+            }
+        };
+
+        const tangentPlot = {
+            x: [x[0], x[0]],
+            y: [y[0], y[0]],
+            z: [z[0], z[0]],
+            mode: "lines",
+            type: "scatter3d",
+            line: {
+                width: 2,
+                color: 'Red',
+            }
+        };
+
+        const tangentArrowHead = {
+            type: "cone",
+            x: [x[1]],
+            y: [y[1]],
+            z: [z[1]],
+            u: [0.3*(x[1]-x[0])],
+            v: [0.3*(y[1]-y[0])],
+            w: [0.3*(z[1]-z[0])],
+            anchor: "tip", // make cone tip be at endpoint
+            hoverinfo: "none",
+            colorscale: [[0, "Red"], [1, "Red"]], // color all cones blue
+            showscale: false,
+        }
+
+            function createData() {
+            const x = [], y = [], z = [], tangents = [];
+
+            for (let i = 0; i < maxSteps; i++) {
+                const tangent  = SlipSimulation.getSolutionTangent(currentSolution, parameters);
+                currentSolution = continueSolution(currentSolution, tangent, 0.05);
+
+                x.push(currentSolution.e(3));
+                y.push(currentSolution.e(4));
+                z.push(currentSolution.e(5));
+                tangents.push(tangent.elements);
+            }
+
+            const data = { x: x, y: y, z: z, tangents: tangents };
+            console.log(JSON.stringify(data));
+        }
+
+        function dataSpaceToPlotSpace(x, y, z, aspect) {
+            const multiplier = 2 * aspect;
+
+            const center_x = (layout.scene.xaxis.range[1] + layout.scene.xaxis.range[0]) / 2;
+            const x_coord = ((x - center_x) / ((layout.scene.xaxis.range[1] - layout.scene.xaxis.range[0])) / 2) * multiplier;
+
+            const center_y = (layout.scene.yaxis.range[1] + layout.scene.yaxis.range[0]) / 2;
+            const y_coord = ((y - center_y) / ((layout.scene.yaxis.range[1] - layout.scene.yaxis.range[0])) / 2) * multiplier;
+
+            const center_z = (layout.scene.zaxis.range[1] + layout.scene.zaxis.range[0]) / 2;
+            const z_coord = ((z - center_z) / ((layout.scene.zaxis.range[1] - layout.scene.zaxis.range[0])) / 2) * multiplier;
+
+            return { x: x_coord, y: y_coord, z: z_coord };
+        }
+        
+        function showPlot(endIndex, distance = 1, focusWeight = 1, angle = 0, marker_size = 0){
+            const x_slice = x.slice(0, endIndex + 1);
+            const y_slice = y.slice(0, endIndex + 1);
+            const z_slice = z.slice(0, endIndex + 1);
+
+            lines.x = x_slice;
+            lines.y = y_slice;
+            lines.z = z_slice;
+
+            lines.marker.size = marker_size;
+
+            const x_end = x[endIndex];
+            const y_end = y[endIndex];
+            const z_end = z[endIndex];
+
+            if (endIndex >= 0) {
+                const l = 0.025;
+                const tangent_x = x[endIndex];
+                const tangent_y = y[endIndex];
+                const tangent_z = z[endIndex];
+
+                const tangent = tangents[endIndex];
+                const scaledTangent = tangent.multiply(l);
+                tangentPlot.x = [tangent_x , tangent_x + scaledTangent.e(3)];
+                tangentPlot.y = [tangent_y, tangent_y + scaledTangent.e(4)];
+                tangentPlot.z = [tangent_z, tangent_z + scaledTangent.e(5)];
+
+                tangentArrowHead.x = [ tangent_x  + scaledTangent.e(3)];
+                tangentArrowHead.y = [ tangent_y + scaledTangent.e(4)];
+                tangentArrowHead.z = [ tangent_z + scaledTangent.e(5)];
+                tangentArrowHead.u = [0.3*(scaledTangent.e(3))];
+                tangentArrowHead.v = [0.3*(scaledTangent.e(4))];
+                tangentArrowHead.w = [0.3*(scaledTangent.e(5))];
+            }
+            else 
+            {
+                tangentPlot.x = [x_end, x_end];
+                tangentPlot.y = [y_end, y_end];
+                tangentPlot.z = [z_end, z_end];
+            }
+
+            const aspect = 0.5;
+            layout.scene.aspectratio = {
+                x: aspect,
+                y: aspect,
+                z: aspect
+            };
+
+            const center = dataSpaceToPlotSpace(x_end, y_end, z_end, aspect);
+
+            const default_center = { x: 0, y: 0, z: -0.25 * aspect };
+            center.x = center.x * focusWeight + default_center.x * (1 - focusWeight);
+            center.y = center.y * focusWeight + default_center.y * (1 - focusWeight);
+            center.z = center.z * focusWeight + default_center.z * (1 - focusWeight);
+
+            layout.scene.camera.center = {
+                x: center.x,
+                y: center.y,
+                z: center.z
+            };
+            
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+
+            const offset = { x: distance * cos, y: distance * sin, z: distance * 0.5 };
+
+            layout.scene.camera.eye = {
+                x: center.x + offset.x,
+                y: center.y + offset.y,
+                z: center.z + offset.z
+            };
+            
+            Plotly.animate('continuationPlot', {
+                data: [lines, tangentPlot, tangentArrowHead],
+                layout: layout
+            }, {
+                transition: {
+                    duration: 0
+                },
+                frame: {
+                    duration: 0,
+                    redraw: true
+                }
+            });
+
+            currentEye = layout.scene.camera.eye;
+        }
+
+        function transitionPlot(newStep, newDistance, newAngle, newFocusWeight, time = 500, newMarkerSize = 0) {
+            console.log("Animating plot");
+            clearInterval(animInterval);
+
+            const frameTime = 25;
+            let i = 0;
+            let frameCount = Math.floor(time / frameTime) + 1;
+
+            animInterval = setInterval(() => {
+
+                const t = cubicEaseInOut(i / frameCount);
+                const step = Math.floor((currentStep * (1 - t) + newStep *t));
+                const distance = (currentDistance * (1 - t) + newDistance * t);
+                const angle = (currentAngle * (1 - t) + newAngle * t);
+                const focusWeight = (currentFocusWeight * (1 - t) + newFocusWeight * t);
+                const marker_size = (current_marker_size * (1 - t) + newMarkerSize * t);
+                
+                if (i > frameCount) {
+                    clearInterval(animInterval);
+
+                    showPlot(newStep, newDistance, newFocusWeight, newAngle, newMarkerSize);
+                    currentStep = newStep;
+                    currentDistance = newDistance;
+                    currentAngle = newAngle;
+                    currentFocusWeight = newFocusWeight;
+                    current_marker_size = newMarkerSize;
+                } else {
+                    showPlot(step, distance, focusWeight, angle, marker_size);
+                    i++;
+                }
+            }, frameTime);
+
+        }
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", json_path, false);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState == 4 && xhr.status == 200) {
+                const data = JSON.parse(xhr.responseText);
+
+                x = data.x;
+                y = data.y;
+                z = data.z;
+                tangents = data.tangents.map(t => $V(t));
+
+                lines.x = [ x[0] ];
+                lines.y = [ y[0] ];
+                lines.z = [ z[0] ];
+
+                Plotly.newPlot('continuationPlot', [lines, tangentPlot, tangentArrowHead], layout,  {displayModeBar: false});
+                transitionPlot(currentStep, currentDistance, currentAngle, currentFocusWeight);
+
+                const plot = document.getElementById('continuationPlot');
+                //print camera position on layout update
+                plot.on('plotly_relayout', function(eventdata){
+                    console.log(eventdata);
+                });
+                 
+            }
+        }
+        xhr.send();
+    </script>
+</body>

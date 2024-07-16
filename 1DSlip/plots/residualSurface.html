@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+    <style type="text/css">
+        body{
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <script src="../lib/sylvester.js"></script>
+    <script src="../code/simulation.js"></script>
+    
+    <script src="../lib/plotly-2.32.0.min.js" charset="utf-8"></script>
+
+    <div class="row" style = "display:flex; justify-content: center;">
+        <div class = "col-50" id="residualPlot" style="width:700px;height:300px;"></div>
+    </div>
+    <p>Fig. 4: Residual magnitude for different values of T and ξ</p>
+
+    <script>
+        var parameters = { m: 1, k: 100, b: 1, g: 9.81, h: 0.005, I: "Runge-Kutta" };
+
+        //Plot the residual for different T and xi values
+        const T_range = [0, 2];
+        const xi_range = [0, 50];
+        const a_range = [-0.5, 2.5];
+        const n = 64;
+        const a_layers = 32;
+        const animDuration = 1000;
+        const json_path = "../data/residual.json"
+
+        var r_datas = [];
+        var continuation_data = null;
+        var a_layer = 16;
+        var transitionInterval = null;
+
+        var _transitions = [
+            {
+                transitionForward: () => {transitionPlot(animDuration, 5);},
+                transitionBackward: () => {transitionPlot(animDuration, 16);},
+                index: 4
+            }
+        ]
+
+        //xi, T, a : x, y, z
+
+        function getZeros(a){
+            var xi = 0;
+            var T = 0;
+
+            for (var i = 0; i < continuation_data.x.length; i++){
+                if (continuation_data.z[i] < a){
+                    xi = continuation_data.x[i];
+                    T =  continuation_data.y[i];
+                    break;
+                }
+            }
+
+            const numZeros = 10;
+            const xis = [...Array(numZeros).keys()].map(x => xi);
+            const Ts = [...Array(numZeros).keys()].map(x => T * (x + 1));
+
+            return {xi: xis, T: Ts};
+        }
+
+        function transitionPlot(duration, targetA_layer) {
+
+            console.log("transition from " + a_layer + " to " + targetA_layer);
+            if (targetA_layer == a_layer) {
+                return;
+            }
+
+            const dir = targetA_layer > a_layer ? 1 : -1;
+            clearInterval(transitionInterval);
+
+            transitionInterval = setInterval(() => {
+                if (a_layer != targetA_layer) {
+                    a_layer += dir;
+
+                    contour.z = r_datas[a_layer].data;
+
+                    const zeroPos = getZeros(r_datas[a_layer].a);
+                    zero.x = zeroPos.xi;
+                    zero.y = zeroPos.T;
+
+                    console.log(r_datas[a_layer].a);
+                    Plotly.animate('residualPlot', {
+                        data: [contour]
+                    }, {
+                        transition: {
+                            duration: 1,
+                        },
+                        frame: {
+                            duration: 1,
+                            redraw: true
+                        }
+                    });
+                } else {
+                    clearInterval(transitionInterval);
+                }
+            }, duration / 10);
+        }
+
+        function createData() {
+            var r_datas = [];
+            for (var k = 0; k < a_layers; k++) {
+                var a = a_range[0] + k * (a_range[1] - a_range[0]) / (a_layers - 1);
+                var r_data = [];
+                for (var i = 0; i < n; i++) {
+                    var T = T_range[0] + i * (T_range[1] - T_range[0]) / (n - 1);
+                    var row = [];
+                    for (var j = 0; j < n; j++) {
+                        var xi = xi_range[0] + j * (xi_range[1] - xi_range[0]) / (n - 1);
+                        
+                        var result = SlipSimulation.residual($V([a, 0, xi, T]), a, parameters);
+                        row.push(result.modulus());
+                    }
+                    r_data.push(row);
+                }
+                console.log(a);
+                r_datas.push({a: a, data: r_data});
+            }
+            return r_datas;
+        }
+        // console.log(JSON.stringify(createData()));
+
+        const layout = {
+            xaxis: {
+                title: 'ξ',
+                range: xi_range,
+            },
+            yaxis: {
+                title: 'T',
+                range: T_range,
+                
+            },
+            showlegend: false,
+            margin: {
+                l: 40,  
+                r: 40,
+                b: 40,
+                t: 40,
+                pad: 4
+            },
+            paper_bgcolor:'rgba(0,0,0,0)',
+            plot_bgcolor:'rgba(0,0,0,0)'
+        };
+
+        const contour = {
+            z: [],
+            x: [],
+            y: [],
+            type: 'contour',
+            colorscale: 'Viridis',
+            showscale: false,
+        };
+
+        const zero = {
+            x: [],
+            y: [],
+            mode: 'markers',
+            marker: {
+                size: 10,
+                color: 'red'
+            }
+        };
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "../data/continuation.json", false);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState == 4 && xhr.status == 200) {
+                continuation_data = JSON.parse(xhr.responseText);
+            }
+        }
+        xhr.send();
+
+        xhr = new XMLHttpRequest();
+        xhr.open("GET", json_path, false);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState == 4 && xhr.status == 200) {
+                r_datas = JSON.parse(xhr.responseText);
+
+                const zeroPos = getZeros(r_datas[a_layer].a);
+                zeroX = zeroPos.xi;
+                zeroY = zeroPos.T;
+
+                contour.z = r_datas[a_layer].data;
+                contour.x = [...Array(n).keys()].map(x => x * (xi_range[1] - xi_range[0]) / (n - 1) + xi_range[0]);
+                contour.y =  [...Array(n).keys()].map(x => x * (T_range[1] - T_range[0]) / (n - 1) + T_range[0]);
+                
+                zero.x = zeroX;
+                zero.y = zeroY;
+
+                Plotly.newPlot('residualPlot', [contour, zero], layout,  {displayModeBar: false});
+            }
+        }
+        xhr.send();
+    
+    </script>
+</body>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+    <style type="text/css">
+        body{
+            font-family: Arial, sans-serif;
+        }
+
+        select {
+            background: none;
+            border: none;
+            --prefix-appearance: none;   
+            appearance: none;
+            -webkit-appearance: none;
+            font-family: inherit;
+            font-size: inherit;
+            width: fit-content;
+            margin-top: -0.05em;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <script src="../lib/sylvester.js"></script>
+    <script src="../code/simulation.js"></script>
+    
+    <script src="../lib/plotly-2.32.0.min.js" charset="utf-8"></script>
+
+    <div class="row" style = "display:flex; justify-content: center;">
+        <div class = "col-50" id="phaseDiagram" style="width:500px;height:400px;"></div>
+        <div class = "col-50" id="springVisualization" style="width:250px;height:400px;">
+            <canvas id="springCanvas" width="250" height="400"></canvas>
+        </div>
+    </div>
+    <div class = "control" style = "display:flex; justify-content: center; padding-top: 20px;">
+        <span> Fig. 3: Phase diagram of the 1D slip model for ξ=  </span><span id = "xi-input"  contenteditable="true">0</span>
+        <span> , and parameters: &nbsp; </span>
+        <span> m= </span> <span id = "m-input"  contenteditable="true">1</span>
+        <span> , k=</span> <span id = "k-input"  contenteditable="true">100</span>
+        <span> , b=</span> <span id = "b-input"  contenteditable="true">1</span>
+        <span> , g=</span> <span id = "g-input"  contenteditable="true">9.81</span> 
+    </div>
+    <div class = "control" style = "display:flex; justify-content: center;">
+        <span> We are integrating the system for &nbsp; </span><span id = "T-input"  contenteditable="true">10</span>
+        <span> &nbsp;seconds with Δt=</span> <span id = "h-input"  contenteditable="true"> 0.005 </span> 
+        <span> &nbsp; using &nbsp; </span> 
+        <select list="integrators" id="I-input">
+            <option value="Runge-Kutta">Runge-Kutta</option>
+            <option value="Midpoint">Midpoint</option>
+            <option value="Euler">Euler</option>
+        </select>
+        <span> &nbsp;integration. </span>
+    </div>
+    <script>
+        const springVisualization = document.getElementById('springVisualization');
+        const springCanvas = document.getElementById('springCanvas');
+
+        const ctx = springCanvas.getContext('2d');
+        const w = springCanvas.width;
+        const h = springCanvas.height;
+
+        function drawSlip(ypos, length) {
+            ctx.save ();
+    
+            ctx.clearRect(0, 0, w, h); 
+            ctx.translate(w / 2, h * 0.8);
+
+            // SPRING
+            const springWidth = w / 6; 
+            const springLength = length * h / 4;   
+            const springTurns = 6;   
+            const y = ypos * h / 4;
+            
+            ctx.beginPath();
+            ctx.moveTo(0, -y);
+            for (let i = 0; i < springTurns; i++) {
+                const h = springLength / springTurns;
+
+                ctx.lineTo(springWidth / 2, -y + (i + 0.25) * h);
+                ctx.lineTo(0, -y +  (i + 0.5) * h);
+                ctx.lineTo(-springWidth / 2, -y + (i + 0.75) * h);
+                ctx.lineTo(0, -y + (i + 1) * h);  
+            }            
+            ctx.stroke();
+
+            // GROUND
+            const groundWidth = w / 2;
+            const groundHeight = 10;
+            const groundLines = 10;
+
+            ctx.beginPath();
+            ctx.moveTo(-groundWidth / 2, 0);
+            ctx.lineTo(groundWidth / 2, 0);
+            ctx.stroke();
+
+            for (let i = 0; i < groundLines; i++) {
+                const x = -groundWidth / 2 + i * groundWidth / groundLines + groundWidth / groundLines / 2;
+
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x + groundWidth / groundLines / 2, groundHeight);
+                ctx.stroke();
+            } 
+  
+            // MASS 
+            const massWidth = 50;
+            const massHeight = 50; 
+            const massX = 0;
+            const massY = -y - massHeight / 2;
+
+            ctx.fillStyle = 'rgb(200, 200, 200)';
+            ctx.fillRect(massX - massWidth / 2, massY - massHeight / 2, massWidth, massHeight);
+            ctx.strokeRect(massX - massWidth / 2, massY - massHeight / 2, massWidth, massHeight);
+
+            ctx.font = "20px Arial";
+            ctx.fillStyle = 'black';
+            ctx.textAlign = "center";
+            ctx.fillText("m", massX, massY + 10);
+
+            ctx.restore(); 
+            drawingTask = null;
+        }
+    </script>
+
+    <script>
+        const animDuration = 0.5;
+        var parameters = { m: 1, k: 100, b: 1, g: 9.81, xi: 0, n: 1000, T: 20, x0: $V([1, 0]), h: 0.005, I: "Runge-Kutta" };
+
+        var plotData = null;
+        var startTime = null;
+        var animationProgress = 0;
+        var animationInterval = null;
+        var drawingTask = null;
+        var animationRunning = true;
+
+        var _transitions = [
+            {
+                transitionForward: () =>  {parameters.xi = 5.5; transitionPlot(animDuration); syncInputs();},
+                transitionBackward: () => {parameters.xi = 0.0; transitionPlot(animDuration); syncInputs();},
+                index: 1
+            },
+            {
+                transitionForward: () =>  {parameters.x0 = $V([0, 0]); transitionPlot(animDuration); syncInputs();},
+                transitionBackward: () => {parameters.x0 = $V([1, 0]); transitionPlot(animDuration); syncInputs();},
+                index: 2
+            },
+            {
+                transitionForward: () =>  {parameters.x0 = $V([1, 0]);  adjustXi();},
+                transitionBackward: () => {parameters.x0 = $V([0, 0]); parameters.xi = 5.5; transitionPlot(animDuration); syncInputs();},
+                index: 3
+            },
+        ]
+
+        function attachListener(id, param) {
+            document.getElementById(id).addEventListener('input', (event) => {
+                var value = parseFloat(event.target.innerText);
+                if (isNaN(value)) value = event.target.value;
+                if (value === undefined) return;
+
+                console.log(event.target.value);
+
+                parameters[param] = value;
+                transitionPlot(0.1);
+            });
+        }
+
+        attachListener('xi-input', 'xi');
+        attachListener('m-input', 'm');
+        attachListener('k-input', 'k');
+        attachListener('b-input', 'b');
+        attachListener('g-input', 'g');
+        attachListener('T-input', 'T');
+        attachListener('h-input', 'h');
+        attachListener('I-input', 'I');
+
+        function syncInputs() {
+            document.getElementById('xi-input').innerText = Math.round(parameters.xi * 1000) / 1000;
+            document.getElementById('m-input').innerText = parameters.m;
+            document.getElementById('k-input').innerText = parameters.k;
+            document.getElementById('b-input').innerText = parameters.b;
+            document.getElementById('g-input').innerText = parameters.g;
+            document.getElementById('T-input').innerText = parameters.T;
+            document.getElementById('h-input').innerText = parameters.h;
+            document.getElementById('I-input').value = parameters.I;
+        }
+
+        function adjustXi() {
+            const a = parameters.x0.e(1);
+            const params = { m: parameters.m, k: parameters.k, b: parameters.b, g: parameters.g};
+            const result = SlipSimulation.findPeriodicSolution(x0 = $V([1,0]), xi0 = 7, T0 = 1.4, a, params);
+
+            if (result) {
+                parameters.xi = result.xi;
+                transitionPlot(animDuration);
+                syncInputs();
+            }
+
+            console.log(result);
+        }
+
+        function updatePlotData () { 
+            parameters.n = Math.floor(parameters.T / parameters.h);
+            const funcParams = { m: parameters.m, k: parameters.k, b: parameters.b, g: parameters.g};
+            plotData = SlipSimulation.simulateSlip(parameters.T, parameters.h, parameters.x0, parameters.xi, funcParams, parameters.I);
+        }
+
+        var trace1 = {
+            x: Array.from({length: parameters.n}, (_, i) => 0),
+            y: Array.from({length: parameters.n}, (_, i) => 0),
+            ids: Array.from({length: parameters.n}, (_, i) => i),
+            mode: 'lines',  
+            type: 'scatter',
+        };
+
+        var marker = {
+            x: [parameters.x0.e(1)],
+            y: [parameters.x0.e(2)],
+            mode: 'markers',
+            type: 'scatter',
+
+            marker: {
+                size: 10,
+                color: 'rgb(0, 0, 255)'
+            }
+        }
+
+        const layout = {
+            xaxis: {
+                title: 'y [m]',
+                range: [-1.1, 1.1]
+            },
+            yaxis: {
+                title: 'ẏ [m/s]',
+                range: [-5, 5]
+            },
+            autosize: true,
+            showlegend: false,
+            margin: {
+                l: 40,  
+                r: 10,
+                b: 50,
+                t: 50,
+                pad: 4
+            },
+            paper_bgcolor:'rgba(0,0,0,0)',
+            plot_bgcolor:'rgba(0,0,0,0)'
+        };
+
+        function transitionPlot(durationSeconds = 1) {
+            animationRunning = false;
+            clearInterval(animationInterval);
+            updatePlotData();
+
+            // UPDATE PLOTS
+            trace1.x = plotData.x.map(x => x.e(1));
+            trace1.y = plotData.x.map(x => x.e(2));
+            marker.x = [plotData.x[animationProgress % parameters.n].e(1)];
+            marker.y = [plotData.x[animationProgress % parameters.n].e(2)];
+
+            Plotly.animate('phaseDiagram', {
+                data: [trace1, marker]
+            }, {
+                transition: {
+                    duration: durationSeconds * 1000,
+                    easing: 'cubic-in-out'
+                },
+                frame: {
+                    duration: durationSeconds * 1000,
+                    redraw: false
+                },
+                mode: 'next'
+            }).then(() => {
+                animationRunning = true;
+                const h = plotData.t[1] - plotData.t[0];
+                startTime = new Date().getTime();
+
+                animationInterval = setInterval(() => {
+                    if (!animationRunning)
+                        return;
+
+                    marker.x = [plotData.x[animationProgress % parameters.n].e(1)];
+                    marker.y = [plotData.x[animationProgress % parameters.n].e(2)];
+                    
+                    const y = plotData.x[animationProgress % parameters.n].e(1) + 1;
+                    const l = y > 1 ? 1 : y;
+
+                    if (!drawingTask)
+                        drawingTask = setTimeout(() => drawSlip(y, l), 0);
+
+                    Plotly.animate('phaseDiagram', {
+                        data: [trace1, marker]
+                    }, {
+                        transition: {
+                            duration: 0,
+                        },
+                        frame: {
+                            duration: 0,
+                            redraw: false
+                        },
+                        mode: 'next'
+                    }).catch(() => {});
+                    
+                    animationProgress = Math.floor( (new Date().getTime() - startTime) / (h * 1000)) % parameters.n;
+                }, 20);
+            });
+        }
+
+        Plotly.newPlot('phaseDiagram', [trace1, marker], layout);
+        const plot = document.getElementById('phaseDiagram');
+
+        plot.addEventListener('click', (evt) => {
+            var bb = evt.target.getBoundingClientRect();
+            var x = plot._fullLayout.xaxis.p2d(evt.clientX - bb.left);
+            var y = plot._fullLayout.yaxis.p2d(evt.clientY - bb.top);
+
+            parameters.x0 = $V([x, y]);
+            transitionPlot(0);
+        });
+        transitionPlot(0);
+    </script>
+</body>

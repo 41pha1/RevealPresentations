@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+    <style type="text/css">
+        body{
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <script src="../lib/sylvester.js"></script>
+
+    <script src="../lib/maths.js"></script>
+    <script src="../lib/plotly-2.32.0.min.js" charset="utf-8"></script>
+
+    <script src="../code/simulation.js"></script>
+
+    <div class="row" style = "display:flex; justify-content: center;">
+        <div class = "col-50" id="newtonPlot" style="width:700px;height:400px;"></div>
+    </div>
+    <p style = "text-align: center;"> Fig. 5 Convergence of the Newton Method for different initial guesses</p>
+
+    <script>
+        const fastConverge = $V([0.5, 0.0, 7, 1.25]);  // Fast convergence
+        const oscillate =  $V([0.5, 0.0, 7, 3]);       // Oscillation
+        const noConverge =  $V([-0.05, 0.0, 1000, 0.7]);   // No convergence
+
+        const f = ((x) => SlipSimulation.residual(x, lambda, parameters)).bind(SlipSimulation);
+
+
+        var parameters = { m: 1, k: 100, b: 1, g: 9.81, h: 0.005, I: "Runge-Kutta" };
+
+        var _transitions = [
+            {
+                transitionForward: () =>  {plotNewtonMethod (fastConverge, f, 1e-14, 100);},
+                transitionBackward: () => {plotNewtonMethod (fastConverge, f, 1e-14, 1);},
+                index: 1
+            },
+            {
+                transitionForward: () =>  {plotNewtonMethod (oscillate, f, 1e-14, 20, 100);},
+                transitionBackward: () => {plotNewtonMethod (fastConverge, f, 1e-14, 10);},
+                index: 2
+            },
+            {
+                transitionForward: () =>  {plotNewtonMethod (noConverge, f, 1e-14, 10);},
+                transitionBackward: () => {plotNewtonMethod (oscillate, f, 1e-14, 20, 100);},
+                index: 3
+            },
+        ];     
+
+        var animInterval = null;
+
+        function iterateOnce(x, f, fx) {
+            var J = SlipSimulation.jacobian(f, x, fx);
+            var dx = SlipSimulation.solveLU(J, fx);
+            x = x.subtract(dx);
+            return x;
+        }
+
+        function newtonMethod(x0, f, tol, maxIter) {
+            var x = x0.dup();
+            var fx = f(x);
+            var res = fx.modulus();
+            var iter = 0;
+
+            var res_data = [];
+            while (res > tol && iter < maxIter) {
+                try {
+                    x = iterateOnce(x, f, fx);
+                    fx = f(x);
+                } catch (error) {
+                    console.log(error);
+                    return { x: x, res_data: res_data, success: false, error: true };
+                }
+                
+                res = fx.modulus();
+                iter++;
+
+                res_data.push(res);
+            }
+
+            return { x: x, res_data: res_data, success: res <= tol, error: false };
+        }
+
+        var trace = {
+            x: [],
+            y: [],
+            mode: 'lines+markers',
+            type: 'scatter'
+        };
+
+        var errorMarker = {
+            x: [],
+            y: [],
+            mode: 'markers',
+            type: 'scatter',
+            marker: { 
+                size: 10,
+                color: 'red' ,
+                symbol: 'x'
+            }
+        };
+
+        var successMarker = {
+            x: [],
+            y: [],
+            mode: 'markers',
+            type: 'scatter',
+            marker: { 
+                size: 10,
+                color: 'green' ,
+                symbol: 'o'
+            }
+        };
+
+        var layout = {
+            xaxis: {
+                title: 'Iteration',
+                range: [0, 10]
+            },
+            yaxis: {
+                title: 'Residual',
+                type: 'log',
+                exponentformat: 'power',
+                range: [-10, 1]
+            },
+            showlegend: false,
+            paper_bgcolor:'rgba(0,0,0,0)',
+            plot_bgcolor:'rgba(0,0,0,0)'
+        };
+
+        function plotNewtonMethod(x0, f, tol, maxIter, frameDuration = 200) {
+            lambda = x0.e(1);
+            var x = x0.dup();
+            var fx = f(x);
+            var iter = 0;
+            var res = fx.modulus();
+
+            const result = newtonMethod(x0, f, tol, maxIter);
+            var res_data = result.res_data;
+
+            console.log(res_data);
+
+            layout.xaxis.range = [-0.5, res_data.length - 0.5];
+
+            const y_min = Math.min(...res_data);
+            const y_max = Math.max(...res_data);
+            layout.yaxis.range = [Math.log10(y_min)-1, Math.log10(y_max)+1];
+            
+            trace.y = [];
+            trace.x = [];
+            errorMarker.x = [];
+            errorMarker.y = [];
+            successMarker.x = [];
+            successMarker.y = [];
+
+            Plotly.update('newtonPlot', [trace, errorMarker], layout);
+            Plotly.relayout('newtonPlot', layout);
+
+            clearInterval(animInterval);
+            animInterval = setInterval(() => {
+                if (iter++ >= res_data.length) {
+                    clearInterval(animInterval);
+                    return;
+                }
+
+                trace.y = res_data.slice(0, iter);
+                trace.x = Array.from({ length: iter }, (_, i) => i);
+                
+                if (iter == res_data.length && result.error) {
+                    console.log('Error');
+
+                    errorMarker.x = [iter-1];
+                    errorMarker.y = [res_data[iter-1]];
+                }else{
+                    errorMarker.x = [];
+                    errorMarker.y = [];
+                }
+
+                if (iter == res_data.length && result.success) {
+                    console.log('Success');
+
+                    successMarker.x = [iter-1];
+                    successMarker.y = [res_data[iter-1]];
+                }else{
+                    successMarker.x = [];
+                    successMarker.y = [];
+                }
+
+                var data = [trace, errorMarker, successMarker];
+
+                Plotly.update('newtonPlot', data, layout);
+ 
+            }, frameDuration);
+        }
+
+        Plotly.newPlot('newtonPlot', [trace, errorMarker, successMarker], layout);
+
+    </script>
+
+</body>

@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>reveal.js</title>
+
+		<link rel="stylesheet" href="../dist/reset.css">
+		<link rel="stylesheet" href="../dist/reveal.css">
+		<link rel="stylesheet" href="../dist/theme/white.css">
+        <link rel="stylesheet" href="style.css">
+        
+		<link rel="stylesheet" href="../plugin/highlight/monokai.css">
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<section class = "fig-container" data-file = "media/title.html" data-style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+
+                    <aside class="notes">
+                        <p> 
+                            <!-- Welcome to my presentation on the 1D SLIP model, the Spring-Loaded Inverted Pendulum model.
+                            The SLIP model is a quite simple but powerful tool for unerstanding legged locomotion.
+                            Today we will explore numerical methods for finding and analyzing solutions 
+                            to models like this one.
+                             -->
+                            
+                            <br>• welcome presentation spring loaded inverted pendulum
+                            <br>• simple but powerful understanding legged locomotion
+                            <br>• explore numerical methods for finding and analyzing solutions models like this
+                            <br>• let's get started
+                        </p>
+                    </aside>
+				</section>
+                <section>
+                    <section data-auto-animate>
+    
+                        <div class = "image">
+                            <img src="media/gazelle.webp" alt="Gazelle" style="width: 40%; display: block; margin-left: auto; margin-right: auto;">
+                            <span> Gazelle bounding across the African savanna. </span>
+                            <span class="source"> [National Geographic] </span>
+                        </div>
+    
+                        <aside class="notes">
+                            <p> 
+                                <!-- Let's go ahead and imagine a gazelle effortlessly bounding across the African savanna, each leap perfectly timed, 
+                                each landing perfectly balanced. What if we could capture this natural elegance in our robots and prosthetics? 
+                                
+                                Using the 1D SLIP model, we can study the dynamics of legged locomotion and develop control strategies for
+                                stable and efficient movement. -->
+
+                                <br>• imagine gazelle bounding across african savanna
+                                <br>• leap perfectly timed, landing perfectly balanced
+                                <br>• capture natural elegance robots and prosthetics
+                                <br>• need understand dynamics 
+                                <br>• develop control strategy for stable and efficient movement
+                            </p>
+                        </aside>
+                    </section>
+                    <section data-auto-animate>
+                        <div class = "header"><h2> Spring-Loaded Inverted Pendulum Model </h2></div> 
+                           
+                        <div class="image" style = "width: 40%;   display: block;margin-left: auto; margin-right: auto">
+                            <img class = "r-frame" src="media/figure1.png" alt="Figure 1">
+                            <span> Fig. 1: Force plate data of human walking compared to SLIP model. </span>
+                            <span class="source"> [Geyer, Seyfarth et al. 2006] </span>    
+                        </div> 
+
+                        <aside class="notes">
+                            <p> 
+                                <!-- 
+                                It consists of a massless spring leg with a point mass at the top.
+                                Figure 1 compares the walk cycles predicted by the SLIP model (in Red), 
+                                to the actual walk cycles of humans measured on a treadmill (in Black).
+                                On the bottom is the lateral Ground Reaction Force (GRF) and on the top the Longitudinal GRF.
+                                Interestingly is is able to capture the essential dynamics of walking and running, despite its simplicity. -->
+
+                                <br>• leg as massless spring with point mass at top
+                                <br>• spring motivated by biological leg which recycles energy
+                                <br>• here compare predicted walk cycles (red) to actual walk cycles humans (black)
+                                <br>• bottom lateral (left-right) ground reaction force, top Longitudinal (direction of movement) GRF
+                                <br>• able to capture essential dynamics walking and running despite simplicity
+                            </p>
+                        </aside>
+                    </section>
+                    <section data-auto-animate>
+                        <div class = "header"><h2> 1D SLIP </h2></div> 
+                           
+                        <div class="image" style = "width: 40%; float: right;">     
+                            <img class = "r-frame" src="media/figure2.png" alt="Figure 1">
+                            <span style= "font-size: 0.5em" > Fig. 2: SLIP model in 1D. </span>
+                        </div>       
+ 
+                        <div class = "content" style = "width: 50%; float: left;">
+                            <p> Reducing the SLIP model to 1D, we get the following equation of motion: </p>
+                            <div class = "r-stack">
+                               <p class ="fragment fade-out" data-fragment-index="0">  
+                                    \[ \large{ \ddot{y} \cdot m = - F_{G} + F_{S} } \]  
+                                </p>
+                                <p class = "fragment step-fade-in" data-fragment-index="0">
+                                    \[ \large {  \ddot{y} \cdot m = - g \cdot m - y\cdot k \cdot \mathcal{H} \left( -y\right) }\]
+                                </p> 
+                            </div>
+                            <p class="fragment fade-in" data-fragment-index="1"> 
+                                where \( \mathcal{H} \left( y\right) \) is the Heaviside function defined as: 
+                            </p>
+                            <p class="fragment fade-in" data-fragment-index="1">
+                                \[ \mathcal{H} \left( y\right) = \left\{ \begin{array}{ll}
+                                    1 & \mbox{if } y > 0 \\
+                                    0 & \mbox{if } y \leq 0
+                                    \end{array}
+                                    \right. \]
+                            </p>
+                            <p class="fragment fade-in" data-fragment-index="2">
+                                Taking into account linear damping and actuation when the spring is compressed, we get:
+                            </p>
+                            <p class="fragment fade-in" data-fragment-index="2" data-id ="ode">
+                                \[ damping: F_{D} = - b \cdot \dot{y}, \ \ \ actuation: F_{A} = \xi \cdot \mathcal{H} \left( \dot{y} \right) \]
+                            </p>
+                            <p class="fragment fade-in" data-fragment-index="3">
+                                \[ \ddot{y} \cdot m = - g \cdot m + \mathcal{H} \left(-y\right) \bigl[ \mathcal{H} \left(\dot{y}\right) \xi -  y \cdot k - \dot{y} \cdot  b \bigr] \]
+                            </p>
+                            <p class="fragment fade-in" data-fragment-index="3">
+                                with the actuation parameter \( \xi \) and the damping parameter \( b \). 
+                            </p>
+                        </div>
+                        
+                        <aside class="notes">
+                            <p> 
+                                <!-- The 1D SLIP model simplifies the analysis by considering motion in only the vertical direction.
+                                The equation of motion takes into account the gravitational force Fg = m * g and the spring force Fs = k * y when the spring is compressed (y < 0).
+                                Adding damping and actuation allows for more realistic modeling of energy losses and control mechanisms in the system. -->
+
+                                <br>• reduce to 1D simplifies analysis by consider vertical only
+                                <br>• lets derive equation of motion
+                                <br>• we have accel * mass = sum of acting forces
+                                <br>• acting: gravitational force Fg = m * g
+                                <br>• spring force Fs = k * y
+                                <br>• ---------------------CLICK---------------------
+                                <br>• plugging in we get ... where H is Heaviside function
+                                <br>• ---------------------CLICK---------------------
+                                <br>• which applies spring force only when spring compressed (y < 0)
+
+                                <br>• account linear spring damping b proportional velocity
+                                <br>• actuation force xi when spring compressed and moving up
+                                <br>• ---------------------CLICK---------------------
+                                <br>• final arrive second order linear ODE describing motion
+                                <br>• with jump force xi and damping coefficient b
+                            </p>
+                        </aside>
+
+                    </section>
+                    <section data-auto-animate>
+                        <div class = "header">
+                            <h2> 1D SLIP </h2>
+                        </div>
+
+                        <div class = "content" style = "width: 50%; position:absolute; right: 0; top: 0;">
+                            <div class = "r-stack">
+                                <p data-id="ode">
+                                    \[ \ddot{y} \cdot m = - g \cdot m + \mathcal{H} \left(-y\right) \bigl[ \mathcal{H} \left(\dot{y}\right) \xi -  y \cdot k - \dot{y} \cdot  b \bigr] \]
+                                </p> 
+                            </div>
+                        </div>
+
+
+                        <div class = "content"> 
+                            <p>
+                                Let \( \varphi (t, y_0, \dot{y}_0, \xi) \) be the general solution to the differential equation. </p>
+                            </p>
+
+                            <div class="fragment fade-in fig-container" data-fragment-index="0" data-file="plots/phaseDiagram.html" 
+                                data-style="height: 500px; width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                            </div>
+                            
+                            
+                        </div> 
+                        
+                        <aside class = "notes">
+                            <p> 
+                                <br>• lets look at how solutions behave 
+                                <br>• assume we can only control jump force xi 
+                                <br>• general solution phi(t, y0, ydot0, xi) only dependent on initial conditions and actuation parameter
+                                <br>• solve numerically using explicit fourth order Runge-Kutta method
+                                <br> ---------------------CLICK---------------------
+                                <br>• plot phase portrait of system 
+                                <br>• speed is vertical axis, position horizontal axis
+                                <br>• without actuation system slowly dissipates energy until stop
+                                <br>• ---------------------CLICK---------------------
+                                <br>• increase actuation system starts we see convergence to limit cycle
+                                <br>• limit cycle is only dependent on jump force xi
+                                <br>• ---------------------CLICK---------------------
+                                <br>• here same limit cycle reach from opposite direction
+                                <br>• how find xi so system oscillates periodically given initial conditions
+                                <br>• ---------------------CLICK---------------------
+                                <br>• for this example the perfekt xi was about 7.3 Newton
+                                <br>• how can we find periodic solutios better than trial and error
+                                <br>• quicly infeasible high dimensional systems
+                            </p>
+                        </aside>
+
+                    </section>
+                </section>
+                <section data-auto-animate>
+                    <section data-auto-animate>
+                        <div class="header">
+                            <h2> Periodic Solutions </h2>
+                        </div>
+    
+                        <div class = "content" style = "width: 50%; position:absolute; right: 0; top: 0;">
+                            <div class = "r-stack">
+                                <p data-id="ode">
+                                    \[ \ddot{y} \cdot m = - g \cdot m + \mathcal{H} \left(-y\right) \bigl[ \mathcal{H} \left(\dot{y}\right) \xi -  y \cdot k - \dot{y} \cdot  b \bigr] \]
+                                </p> 
+                            </div>
+                        </div>
+    
+                        <div class = "content">
+    
+                            <p> We can characterize the periodic solutions of the system by the following equations: </p>
+    
+                            <p>
+                                \begin{align*}
+                                    \varphi (t, y_0, \dot{y}_0, \xi) = \varphi (t + T, y_0, \dot{y}_0, \xi) \\
+                                    \dot{\varphi} (t, y_0, \dot{y}_0, \xi) = \dot{\varphi} (t + T, y_0, \dot{y}_0, \xi)
+                                \end{align*}
+                            </p>
+
+                            
+                            <div class="hidden fragment" data-fragment-index="0">secret</div>
+                            <div class="hidden fragment" data-fragment-index="1">secret</div>
+                            <div class="hidden fragment" data-fragment-index="2">secret</div>
+                            <div class="hidden fragment" data-fragment-index="3">secret</div>
+                            <div class="hidden fragment" data-fragment-index="4">secret</div>
+                            <div class="hidden fragment" data-fragment-index="5">secret</div>
+                            
+                            <div style = "width:50%">
+                                <p class="fragment fade-in" data-fragment-index="0">
+                                    Let \(r_{\lambda} \left( y_0, \dot{y}_0, \xi, T \right) : \mathbb{R}^4 \rightarrow \mathbb{R}^4\) be defined as:
+                                    \[ r_{\lambda}: \left( y_0, \dot{y}_0, \xi, T \right) \mapsto \left( \begin{array}{c}
+                                        \varphi (T, y_0, \dot{y}_0, \xi) - y_0 \\
+                                        \dot{\varphi} (T, y_0, \dot{y}_0, \xi) - \dot{y}_0 \\
+                                        y_0 - \lambda \\
+                                        \dot{y}_0
+                                    \end{array} \right) 
+                                    \]
+                                </p>
+                                <p style = "position: absolute; right: 45%; top:33%" class = "fragment fade-in" data-fragment-index="0">
+                                    \( \bigg\} \ periodicity \)
+                                </p>   
+                                <p style = "position: absolute; right: 41.5%; top:42%" class = "fragment fade-in" data-fragment-index="1">
+                                    \( \} \ operating\ point \)
+                                </p>    
+                                <p style = "position: absolute; right: 43.5%; top:47%" class = "fragment fade-in" data-fragment-index="2">
+                                    \( \} \ anchor\ point \) 
+                                </p>    
+                            </div>
+  
+                            <div class="fragment fade-in" data-fragment-index="3" style="position: relative;">
+                                <div data-preload class="fragment reposition-residual fig-container" data-fragment-index="5" data-file="plots/residualSurface.html" 
+                                    data-style="position: absolute, height: 500px; width: 500px; display: block; margin-left: auto; margin-right: auto;"
+                                    style = "position:absolute; top: -20px; left: 50%; transform: translateX(-50%);">
+                                </div>
+                            </div> 
+    
+                            <p class="fragment fade-in" data-fragment-index="6"> 
+                                If we can find \( x_* = \left( y_0, \dot{y}_0, \xi, T \right) ^\intercal  \) such that \( r_{\lambda} \left( x_* \right) = 0 \), 
+                                we have found a periodic solution with period T and initial height \(\lambda\).
+                            </p>
+    
+                            <p class="fragment fade-in" data-fragment-index="7">
+                                \[0 \overset{!}{=} r_{\lambda}(x_*) = r_{\lambda} \left( x_0 \right) + r_{\lambda}' \left( x_0 \right) \cdot \left( x_* - x_0 \right) + \mathcal{O} \left( \left\| x_* - x_0 \right\|^2 \right)\]  
+                                \[ \Rightarrow x_* \approx x_0 - \left( r_{\lambda}' \left( x_0 \right) \right)^{-1} \cdot r_{\lambda} \left( x_0 \right) \]
+                            </p>
+    
+                            <p class="fragment fade-in" data-fragment-index="8">
+                                By iterating this equation, we can approximate the root of \(r_{\lambda}\):
+                            </p>
+    
+                            <p class="fragment fade-in" data-id = "newton-iteration" data-fragment-index="8">
+                                \[ x_{n+1} = x_n - \left( r_{\lambda}' \left( x_n \right) \right)^{-1} \cdot r_{\lambda} \left( x_n \right) \]
+                            </p>
+                        </div>
+
+                        <aside class="notes">
+                            <p> 
+                                <br>• to find periodic solutions need find initial conditions and actuation parameter
+                                <br>• periodicity condition that value and derivative of solution identical after period T > 0
+                                <br>• define residual function r that is zero if periodicity conditions satisfied
+                                <br>• problem: all the points of that solutions are periodic phi(t + T) = phi(t) => phi (tau + T) = phi(tau)
+                                <br>• to get a locally unique solution  need specify operating point lamba and anchor the phase
+                                <br>• ---------------------CLICK---------------------
+                                <br>• ---------------------CLICK---------------------
+                                <br>• operating point fixes the height of the solution in the anchor points v = 0 to lambda meters
+                                <br>• by set operating point and anchor we get distinct solution to r = 0 (the limit cycle with extremum at lambda)
+                                <br>• this !should! should make the Jacobi of the residual function invertible 
+                                <br>• we talk about where this breaks later
+                                <br>• ---------------------CLICK---------------------
+                                <br>• here we see a section of the residual function surface where operating point and anchor point are fixed
+                                <br>• red dot is the root of the residual function 
+                                <br>• -> periodic solution with period T and initial height lambda, actuation xi
+                                <br>• ---------------------CLICK---------------------
+                                <br>• lowering height of operating point lambda we see the roots of the residual function move
+                                <br>• ---------------------CLICK---------------------
+                                <br>• ---------------------CLICK---------------------
+                                <br>• we know can write r(x_zero) as r(x_any) + r'(x_any) * (x_zero - x_any) + O(||x_zero - x_any||^2)
+                                <br>• set r(x_zero) and solve for x_zero we get closed form for x_stero by ignore higher order
+                                <br>• ---------------------CLICK---------------------
+                                <br>• by iterating we can approximate the root of residual
+                            </p>
+                    </section>
+                    <section data-auto-animate>
+                        <div class="header">
+                            <h2> Periodic Solutions </h2>
+                        </div>
+
+                        <div class = "content" style = "width: 50%; position:absolute; right: 0; top: 0;">
+                            <p data-id="newton-iteration">
+                                \[ x_{n+1} = x_n - \left( r_{\lambda}' \left( x_n \right) \right)^{-1} \cdot r_{\lambda} \left( x_n \right) \]
+                            </p>
+                        </div>
+
+                        <div class = "content">
+                            <p> 
+                                We can approximate the Jacobi of the residual function by finite differences:
+                            </p>  
+
+                            <p>
+                                \[ r_{\lambda}' = \begin{pmatrix}
+                                    \frac{\partial r_{\lambda}}{\partial y_0} & \frac{\partial r_{\lambda}}{\partial \dot{y}_0} & \frac{\partial r_{\lambda}}{\partial \xi} & \frac{\partial r_{\lambda}}{\partial T}
+                                \end{pmatrix},
+                                \  \ \frac{\partial r_{\lambda}}{\partial x_i} = \frac{r_{\lambda} \left( x + \epsilon \cdot e_i \right) - r_{\lambda} \left( x  \right)}{\epsilon} \]
+                            </p>
+
+                            <div data-preload class="fragment fig-container" data-file="plots/newtonPlot.html" 
+                                data-style="height: 500px; width: 100%; display: block; margin-left: auto; margin-right: auto;"
+                                data-fragment-index="0">
+                            </div>
+                            <div class="hidden fragment" data-fragment-index="1">secret</div>
+                            <div class="hidden fragment" data-fragment-index="2">secret</div>
+                            <div class="hidden fragment" data-fragment-index="3">secret</div>
+                        </div>  
+
+                        <aside class="notes">
+                            <p> 
+                                <br>• need jacobi for newton iteration
+                                <br>• no closed form for r so can't compute Jacobi directly
+                                <br>• approximate derivative by finite differences
+                                <br>• use forward differences to approximate derivative
+                                <br>• saves one evaluation of residual function per input dimension
+                                <br>• ---------------------CLICK---------------------
+                                <br>• even though crude aproximation -> see quadratic convergence 6 iterations error within 10^-15
+                                <br>• looks good but highly dependent on initial guess
+                                <br>• ---------------------CLICK---------------------
+                                <br>• here newton iteration unable to converge as oscillates around root
+                                <br>• ---------------------CLICK---------------------
+                                <br>• here newton iteration unable to converge because Jacobian singular
+                                <br>• trial and error not good strategy to find all periodic solutions
+                                <br>• lets think of a more robust method to find periodic solutions
+                            </p>
+                    </section>
+                </section>
+                <section data-auto-animate>
+                    <section data-auto-animate>
+                        <div class="header">
+                            <h2> Continuation Method </h2>
+                        </div>
+
+                        <!-- <div class = "content">
+                            <p class="fragment fade-in" data-fragment-index="0">
+                                As we have seen, the Newton iteration is sensitive to the initial guess and does not guarantee convergence for all initial guesses.
+                                We can do much better by finding a solution for a simple case and then following the solution curve to find new solutions.
+                            </p>
+                        </div> -->
+                        
+                        <div class="image fragment" data-fragment-index="2" style = "width: 45%; float: right;">   
+                            <div class = "r-stack">
+                                <img  class = "fragment" data-fragment-index="2" src="media/continuation1.png" alt="Continuation Method" style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                                <img  class = "fragment" data-fragment-index="3" src="media/continuation2.png" alt="Continuation Method" style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                                <img  class = "fragment" data-fragment-index="4" src="media/continuation3.png" alt="Continuation Method" style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                                <img  class = "fragment" data-fragment-index="5" src="media/continuation4.png" alt="Continuation Method" style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                                <img  class = "fragment" data-fragment-index="6" src="media/continuation5.png" alt="Continuation Method" style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                                <img  class = "fragment" data-fragment-index="7" src="media/continuation6.png" alt="Continuation Method" style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                                <img  class = "fragment" data-fragment-index="8" src="media/continuation7.png" alt="Continuation Method" style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                            
+                            </div>  
+                            <span> Fig. 5: Continuation method for continuing zero crossings. </span>
+                        </div>
+
+                        <div class = "content">
+                            <p class="fragment fade-in" data-fragment-index="1">
+                                We can use the continuation method to extend the solution curve to different values of the initial height \( \lambda \).
+                            </p>
+
+                            <div class = "highlight fragment fade-in" data-fragment-index="2" style= "width: 45%; float: left;">
+                                <b><p> The continuation method consists of two steps: </p></b>
+                                
+                                <p class = "fragment" data-fragment-index="3" >
+                                    <b>1.</b> Calculate the tangent to the solution curve at a known solution and walk along it for some small \( ds \).
+                                </p>
+                                <p class = "fragment" data-fragment-index="4" >
+                                    <b>2.</b> Refine the solution using the Newton iteration.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <aside class="notes">
+                            <p> 
+                                <br>• continuation method lets us track roots of residual while changing our parameters
+                                <br>• assume continuity of solution we vary our operating point a little to find new solutions
+                                <br>• visually relates to tracking motion of red dot in residual surface example
+                                <br>• ---------------------CLICK---------------------
+                                <br>• here see example solution curve with our function inputs on the y-axis (y, v, xi, T) and our parameter on the x-axis (lambda)
+                                <br>• we use the tangent to the solution curve to predict new solutions somewhat close to the new root
+                                <br>• ---------------------CLICK---------------------
+                                <br>• we then refine the solution using the Newton iteration
+                                <br>• ---------------------CLICK---------------------
+                                <br>• this is called a Predictor-Corrector scheme
+                                <br>• by repeating we can follow the solution curve to find periodic solutions for different values of actuation parameter xi
+                                <br>• lets see how this works in practice
+                            </p>
+                        </aside>
+                    </section>
+                    <section data-auto-animate>
+                        <div class="header">
+                            <h2> Continuation Method </h2>
+                        </div>
+
+                        <div class="image" style = "width: 45%; float: right;">     
+                            <img  class = "make-transparent" src="media/continuation7.png" alt="Continuation Method" style="width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                            <span> Fig. 5: Continuation method for continuing zero crossings. </span>
+                        </div>
+
+                        <div class = "content">
+                            <p> 
+                                By extending the residual function to include the initial height \( \lambda \), the Jacobian becomes a \( 5 \times 4 \) matrix with a 1-dimensional kernel.
+                            </p>
+
+                            <p>
+                                \[ \tilde{r} \left( x, \lambda \right) = r_{\lambda} \left(x \right);
+                                \ \ \ \ \ \ \
+                                x = \begin{pmatrix} y_0 \ \ \dot{y}_0 \ \ \xi \ \ T \end{pmatrix} \]
+                            </p>
+                            
+                            <p class="fragment fade-in" data-fragment-index="1">
+                                A parameterization \( c \left( \alpha \right) \) of the solution curve must satisfy:
+                            </p>
+
+                            <p class="fragment fade-in" data-fragment-index="1">
+                                \[ \tilde{r} \left( c \left( \alpha \right) \right) = 0 \]
+                                \[ r' \left( c \left( \alpha \right) \right) \cdot \dot{c} \left( \alpha \right) = 0 \]
+                            </p>
+                            
+                            <p class="fragment fade-in" data-fragment-index="2">
+                                Where \(c' \left( \alpha \right)\) is the tangent vector \(t\). Writing the derivate using the Jacobian we get a condition for the tangent vector:
+                            </p>
+
+                            <p class="fragment fade-in" data-fragment-index="2">
+                                \[ \frac{\partial \tilde{r}}{\partial \tilde{x}} \bigg\rvert _{\tilde{x}_*} \cdot t = 0 \]
+                            </p>
+
+                            <p class="fragment fade-in" data-fragment-index="3">
+                                The tangent vector is not unique. We need to specify the length and direction of the tangent vector:
+                            </p>
+
+                            <p class="fragment fade-in" data-fragment-index="3">
+                                \[\lVert t \rVert = 1;
+                                \ \ \ \ \ \ \ \
+                                det \begin{pmatrix}
+                                    \frac{\partial \tilde{r}}{\partial \tilde{x}} \bigg\rvert _{\tilde{x}_*} \\
+                                    t^\intercal
+                                \end{pmatrix} > 0 \]
+                            </p>
+                        </div>    
+                        
+                        <aside class="notes">
+                            <p> 
+                                <br>• to use continuation method write residual as function of initial amplitude lambda
+                                <br>• now we have 5x4 Jacobian with 1D kernel using assuming full rank
+                                <br>• ---------------------CLICK---------------------
+                                <br>• parameterization of solution curve must satisfy residual zero stay on curve -> r= 0
+                                <br>• deriferentiation by alpha unsing the chain rule we get condition for tangent vector c'(alpha) = t
+                                <br>• ---------------------CLICK---------------------
+                                <br>• the tangent vectors are exactily the kernel of the Jacobian
+                                <br>• to calculate kernel of the Jacobian we can use QR decomposition 
+                                <br>• question is how to choose tangent vector
+                                <br>• ---------------------CLICK---------------------
+                                <br>• first we need to specify length and direction of tangent vector to be of unit length
+                                <br>• direction more tricky but we can use determinant of matrix formed by derivative of residual and tangent vector
+                                <br>• you might wonder why does this works
+                                <br>• the augmented jacobian has full rank as the tangent is orthogonal to all the rows of the jacobian
+                                <br>• meaning the determinant cannot cross zero and change sign along the solution curve
+                            </p>
+                        </aside>
+                    </section>
+                    <section>
+                        <div class="header">
+                            <h2> Continuation Method </h2>
+                        </div>
+
+                        <div class = "content">
+                            <p> 
+                                We can now use the continuation method to find new periodic solutions to the differential equation.
+                            </p>
+
+                            <div style="position: relative;">
+                                <div data-preload class="fragment fig-container" data-file = "plots/continuation.html"
+                                    data-style="height: 600px; width: 100%; display: block; margin-left: auto; margin-right: auto;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <aside class="notes">
+                            <p>
+                                <br>• lets see how this works in practice
+                                <br>• start with single solution and calculate tangent vector
+                                <br>• ---------------------CLICK---------------------
+                                <br>• lets just follow the solution curve and see what happens
+                                <br>• ---------------------CLICK---------------------
+                                <br>• here we see projection to the T - lamba plane
+                                <br>• the period increases as we increase the initial height
+                                <br>• but T is independent for the range were the spring does not leave ground
+                                <br>• ---------------------CLICK---------------------
+                                <br>• here we see the projection to the xi - lambda plane
+                                <br>• lowering the jump force to zero we see the period orbit turns into the spring remaing constant at equilibrium pos y = -g*m/k
+                                <br>• ---------------------CLICK---------------------
+                                <br>• here we see the projection to the xi - T plane
+                                <br>• as we lower and the jump force aprouch solutions without flight phase where T is natural harmoic period T = 2pi/sqrt(k/m)
+
+                            </p>
+                        </aside>
+
+                    </section>
+                </section>
+                <section data-auto-animate>
+                    <div class = "content">
+
+                        <h4>
+                            What have we learned today?
+                        </h4>
+
+                        <p class = "fragment fade-in">
+                            <b>1.</b> The SLIP model is a simple but powerful tool for understanding legged locomotion.
+                        </p>
+
+                        <p class = "fragment fade-in">
+                            <b>2.</b> We can use newton iteration to find the solutions we are interested in.
+                        </p>
+
+                        <p class = "fragment fade-in">
+                            <b>3.</b> The continuation method allows us to follow solution curves of implicit functions.
+                        </p>
+
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+                        <br>
+
+                        <div class = "fragment fade-in image" style = "width: 20%; position: absolute; right: 0; bottom: 0;">
+                            <img src="media/thankyou.gif" alt="Thank You">
+                        </div>
+
+                    </div>
+
+                    <aside class="notes">
+                        <p> 
+                            <br>• SLIP model simple but powerful tool for understanding legged locomotion
+                            <br>• newton iteration sensitive to initial guess and not guarantee convergence
+                            <br>• continuation method allows us to follow solution curves of implicit functions
+                            <br>• lets us find new periodic solutions to the differential equation
+                        </p>
+                </section>
+                <section>
+                    <div class="header">
+                        <h2> Sources </h2>
+                    </div>
+
+                    <div class = "content">
+
+                        <p>
+                           <b>Numerical Continuation Methods: An Introduction </b> <br>
+                            <i>Eugene L. Allgower and Kurt Georg,</i> 1990
+                        </p>
+                        
+                        <p>
+                             <b> Homotopy Method for Finding the Steady States of Oscillators </b> <br>
+                              <i>H. G. Brachtendorf, R. Melville, P. Feldmann, S. Lampe and R. Laur,</i> June 2014
+                        </p>
+
+
+                       
+                    </div>
+                </section>
+                <section>
+                    <pre style = "font-size: 0.4em" class = "javascript">
+                        <code id = "simulation-code" data-trim data-noescape data-line-numbers></code>
+                    </code></pre>
+                    <script>
+                        var client = new XMLHttpRequest();
+                        client.open('GET', 'code/simulation.js');
+                        client.onreadystatechange = function() {
+                            document.getElementById('simulation-code').innerHTML = client.responseText;
+                        }
+                        client.send();
+                    </script>
+                </section>
+			</div>
+		</div>
+
+		<script src="../dist/reveal.js"></script>
+		<script src="../plugin/notes/notes.js"></script>
+		<script src="../plugin/markdown/markdown.js"></script>
+		<script src="../plugin/highlight/highlight.js"></script>
+        <script src="../plugin/zoom/zoom.js"></script>
+        <script src="../plugin/math/math.js"></script>
+        <script src="../plugin/reveald3.js"></script>
+		<script>
+			Reveal.initialize({
+				hash: true,
+                center: true,
+                width: 960,
+                height: 700,
+                margin: 0.04,
+                minScale: 0.2,
+                maxScale: 2.0,
+                viewDistance: 1,
+                autoAnimateDuration: 0.2,
+                slideNumber: "c/t",
+                pause: false,
+                transition: 'none', // none/fade/slide/convex/concave/zoom
+				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes, RevealZoom, RevealMath , Reveald3 ]
+			});
+		</script>
+	</body>
+</html>
